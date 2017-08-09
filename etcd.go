@@ -69,15 +69,15 @@ type Service struct {
 }
 
 func (s *Service) Create(ctx context.Context, key, value string) error {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
 	var err error
 
 	key, err = microstorage.SanitizeKey(key)
 	if err != nil {
 		return microerror.Mask(err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
 	err = s.Put(ctx, key, value)
 	if err != nil {
@@ -88,15 +88,15 @@ func (s *Service) Create(ctx context.Context, key, value string) error {
 }
 
 func (s *Service) Put(ctx context.Context, key, value string) error {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
 	var err error
 
 	key, err = microstorage.SanitizeKey(key)
 	if err != nil {
 		return microerror.Mask(err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
 	_, err = s.keyClient.Put(ctx, key, value)
 	if err != nil {
@@ -107,15 +107,15 @@ func (s *Service) Put(ctx context.Context, key, value string) error {
 }
 
 func (s *Service) Delete(ctx context.Context, key string) error {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
 	var err error
 
 	key, err = microstorage.SanitizeKey(key)
 	if err != nil {
 		return microerror.Mask(err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
 	_, err = s.keyClient.Delete(ctx, key)
 	if err != nil {
@@ -126,15 +126,15 @@ func (s *Service) Delete(ctx context.Context, key string) error {
 }
 
 func (s *Service) Exists(ctx context.Context, key string) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
 	var err error
 
 	key, err = microstorage.SanitizeKey(key)
 	if err != nil {
 		return false, microerror.Mask(err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
 	_, err = s.Search(ctx, key)
 	if microstorage.IsNotFound(err) {
@@ -147,15 +147,15 @@ func (s *Service) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 func (s *Service) List(ctx context.Context, key string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
 	var err error
 
 	key, err = microstorage.SanitizeKey(key)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
 	opts := []clientv3.OpOption{
 		clientv3.WithKeysOnly(),
@@ -200,15 +200,15 @@ func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 }
 
 func (s *Service) Search(ctx context.Context, key string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
 	var err error
 
 	key, err = microstorage.SanitizeKey(key)
 	if err != nil {
 		return "", microerror.Mask(err)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
 	var res *clientv3.GetResponse
 	res, err = s.keyClient.Get(ctx, key)
