@@ -1,5 +1,5 @@
 hash: 55f8187a70a92d950cd84ad8ec2cb520d8f557011e487d817cf716fb02846042
-updated: 2017-08-09T12:23:33.083467324+01:00
+updated: 2017-08-09T17:59:43.684296+02:00
 imports:
 - name: github.com/coreos/etcd
   version: d0d1a87aa96ae14914751d42264262cb69eda170
@@ -16,7 +16,7 @@ imports:
 - name: github.com/giantswarm/microerror
   version: 5ade94eb4ee35ef72eb9382228470caeddb29989
 - name: github.com/giantswarm/microstorage
-  version: 9e691dc8c2efff6a98caa4e004a6d0c231a1ac1b
+  version: 7560c0dd74559527c01a6c713fa529ded4b97205
   subpackages:
   - storagetest
 - name: github.com/golang/protobuf

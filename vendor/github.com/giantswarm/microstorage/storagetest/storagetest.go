@@ -21,6 +21,8 @@ func Test(t *testing.T, storage microstorage.Storage) {
 	testDeleteNotExisting(t, storage)
 	testInvalidKey(t, storage)
 	testList(t, storage)
+	testListNested(t, storage)
+	testListInvalid(t, storage)
 }
 
 func testBasicCRUD(t *testing.T, storage microstorage.Storage) {
@@ -167,9 +169,12 @@ func testInvalidKey(t *testing.T, storage microstorage.Storage) {
 		assert.NotNil(t, err, "%s key=%s", name, key)
 		assert.True(t, microstorage.IsInvalidKey(err), "%s: expected InvalidKeyError for key=%s", name, key)
 
-		_, err = storage.List(ctx, key)
-		assert.NotNil(t, err, "%s key=%s", name, key)
-		assert.True(t, microstorage.IsInvalidKey(err), "%s: expected InvalidKeyError for key=%s", name, key)
+		// List is special and can take "/" as a key.
+		if key != "/" {
+			_, err = storage.List(ctx, key)
+			assert.NotNil(t, err, "%s key=%s", name, key)
+			assert.True(t, microstorage.IsInvalidKey(err), "%s: expected InvalidKeyError for key=%s", name, key)
+		}
 
 		_, err = storage.Search(ctx, key)
 		assert.NotNil(t, err, "%s key=%s", name, key)
@@ -210,6 +215,73 @@ func testList(t *testing.T, storage microstorage.Storage) {
 	}
 }
 
+func testListNested(t *testing.T, storage microstorage.Storage) {
+	var (
+		name = "testListNested"
+
+		ctx = context.TODO()
+
+		baseKey = name + "-key"
+		value   = name + "-value"
+	)
+
+	for _, key0 := range validKeyVariations(baseKey) {
+		key1 := path.Join(key0, "nested/one")
+		key2 := path.Join(key0, "nested/two")
+		key3 := path.Join(key0, "extremaly/nested/three")
+
+		err := storage.Create(ctx, key1, value)
+		assert.Nil(t, err, "%s: key=%s", name, key1)
+
+		err = storage.Create(ctx, key2, value)
+		assert.Nil(t, err, "%s: key=%s", name, key2)
+
+		err = storage.Create(ctx, key3, value)
+		assert.Nil(t, err, "%s: key=%s", name, key3)
+
+		keyAll := "/"
+		keys, err := storage.List(ctx, keyAll)
+		assert.NoError(t, err, "%s: key=%s", name, key0)
+		assert.Contains(t, keys, sanitize(key1), "%s: key=%s", name, keyAll)
+		assert.Contains(t, keys, sanitize(key2), "%s: key=%s", name, keyAll)
+		assert.Contains(t, keys, sanitize(key3), "%s: key=%s", name, keyAll)
+	}
+}
+
+func testListInvalid(t *testing.T, storage microstorage.Storage) {
+	var (
+		name = "testListInvalid"
+
+		ctx = context.TODO()
+
+		baseKey = name + "-key"
+		value   = name + "-value"
+	)
+
+	for _, key0 := range validKeyVariations(baseKey) {
+		key1 := path.Join(key0, "one")
+		key2 := path.Join(key0, "two")
+
+		err := storage.Create(ctx, key1, value)
+		assert.Nil(t, err, "%s: key=%s", name, key1)
+
+		err = storage.Create(ctx, key2, value)
+		assert.Nil(t, err, "%s: key=%s", name, key2)
+
+		// baseKey is key0 prefix.
+		//
+		// We have keys like:
+		//
+		// - /testListInvalid-key-XXXX/one
+		// - /testListInvalid-key-XXXX/two
+		//
+		// Listing /testListInvalid-key should fail.
+		_, err = storage.List(ctx, baseKey)
+		assert.Error(t, err, "%s: key=%s", name, baseKey)
+		assert.True(t, microstorage.IsNotFound(err), "%s: key=%s expected IsNotFoundError", name, baseKey)
+	}
+}
+
 var validKeyVariationsIDGen int64
 
 func validKeyVariations(key string) []string {
@@ -230,4 +302,12 @@ func validKeyVariations(key string) []string {
 		next() + "/",
 		"/" + next() + "/",
 	}
+}
+
+func sanitize(key string) string {
+	k, err := microstorage.SanitizeKey(key)
+	if err != nil {
+		panic(err)
+	}
+	return k
 }

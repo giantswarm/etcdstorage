@@ -149,7 +149,7 @@ func (s *Service) Exists(ctx context.Context, key string) (bool, error) {
 func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 	var err error
 
-	key, err = microstorage.SanitizeKey(key)
+	key, err = microstorage.SanitizeListKey(key)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
@@ -170,6 +170,16 @@ func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 
 	if res.Count == 0 {
 		return nil, microerror.Maskf(microstorage.NotFoundError, key)
+	}
+
+	// Special case.
+	if key == "/" {
+		var list []string
+		for _, kv := range res.Kvs {
+			k := string(kv.Key)
+			list = append(list, k)
+		}
+		return list, nil
 	}
 
 	var list []string
