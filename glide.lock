@@ -1,5 +1,5 @@
 hash: 55f8187a70a92d950cd84ad8ec2cb520d8f557011e487d817cf716fb02846042
-updated: 2017-08-09T17:59:43.684296+02:00
+updated: 2017-08-15T15:39:06.219134476+02:00
 imports:
 - name: github.com/coreos/etcd
   version: d0d1a87aa96ae14914751d42264262cb69eda170
@@ -16,7 +16,7 @@ imports:
 - name: github.com/giantswarm/microerror
   version: 5ade94eb4ee35ef72eb9382228470caeddb29989
 - name: github.com/giantswarm/microstorage
-  version: 7560c0dd74559527c01a6c713fa529ded4b97205
+  version: 55dcb4ea118ed35ec49d4d1346e907affa098df5
   subpackages:
   - storagetest
 - name: github.com/golang/protobuf
@@ -46,7 +46,7 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/text
-  version: 4ee4af566555f5fbe026368b75596286a312663a
+  version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
   - secure/bidirule
   - transform
