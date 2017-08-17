@@ -39,6 +39,13 @@ func New(config Config) (*Service, error) {
 	if config.EtcdClient == nil {
 		return nil, microerror.Maskf(invalidConfigError, "etcd client must not be empty")
 	}
+	if config.Prefix != "" {
+		p, err := microstorage.SanitizeKey(config.Prefix)
+		if err != nil {
+			return nil, microerror.Maskf(invalidConfigError, "prefix must be valid: %s", err)
+		}
+		config.Prefix = p
+	}
 
 	newService := &Service{
 		// Dependencies.
@@ -71,10 +78,9 @@ type Service struct {
 func (s *Service) Create(ctx context.Context, key, value string) error {
 	var err error
 
-	key, err = microstorage.SanitizeKey(key)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+	// The key isn't sanitized in Create, because it uses Put under the
+	// hood. It causes problems when prefix is set, becuase it would be
+	// added twice.
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
@@ -90,7 +96,7 @@ func (s *Service) Create(ctx context.Context, key, value string) error {
 func (s *Service) Put(ctx context.Context, key, value string) error {
 	var err error
 
-	key, err = microstorage.SanitizeKey(key)
+	key, err = s.sanitizeKey(key)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -109,7 +115,7 @@ func (s *Service) Put(ctx context.Context, key, value string) error {
 func (s *Service) Delete(ctx context.Context, key string) error {
 	var err error
 
-	key, err = microstorage.SanitizeKey(key)
+	key, err = s.sanitizeKey(key)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -128,10 +134,9 @@ func (s *Service) Delete(ctx context.Context, key string) error {
 func (s *Service) Exists(ctx context.Context, key string) (bool, error) {
 	var err error
 
-	key, err = microstorage.SanitizeKey(key)
-	if err != nil {
-		return false, microerror.Mask(err)
-	}
+	// The key isn't sanitized in Exists, because it uses Search under the
+	// hood. It causes problems when prefix is set, becuase it would be
+	// added twice.
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
@@ -149,7 +154,7 @@ func (s *Service) Exists(ctx context.Context, key string) (bool, error) {
 func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 	var err error
 
-	key, err = microstorage.SanitizeListKey(key)
+	key, err = s.sanitizeListKey(key)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
@@ -176,7 +181,8 @@ func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 	if key == "/" {
 		var list []string
 		for _, kv := range res.Kvs {
-			k := string(kv.Key)
+			// Skip the leading slash '/'.
+			k := string(kv.Key)[1:]
 			list = append(list, k)
 		}
 		return list, nil
@@ -208,7 +214,7 @@ func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 func (s *Service) Search(ctx context.Context, key string) (string, error) {
 	var err error
 
-	key, err = microstorage.SanitizeKey(key)
+	key, err = s.sanitizeKey(key)
 	if err != nil {
 		return "", microerror.Mask(err)
 	}
@@ -232,4 +238,25 @@ func (s *Service) Search(ctx context.Context, key string) (string, error) {
 	}
 
 	return string(res.Kvs[0].Value), nil
+}
+
+// sanitizeKey invokes microstorage.SanitizeKey and adds common prefix to it.
+func (s *Service) sanitizeKey(key string) (string, error) {
+	key, err := microstorage.SanitizeKey(key)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+	return s.prefix + key, nil
+}
+
+// sanitizeListKey invokes microstorage.SanitizeListKey and adds common prefix to it.
+func (s *Service) sanitizeListKey(key string) (string, error) {
+	key, err := microstorage.SanitizeListKey(key)
+	if err != nil {
+		return "", microerror.Mask(err)
+	}
+	if key == "/" && s.prefix != "" {
+		return s.prefix, nil
+	}
+	return s.prefix + key, nil
 }
