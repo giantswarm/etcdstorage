@@ -75,17 +75,13 @@ type Service struct {
 	timeout time.Duration
 }
 
-func (s *Service) Create(ctx context.Context, key, value string) error {
-	var err error
-
-	// The key isn't sanitized in Create, because it uses Put under the
-	// hood. It causes problems when prefix is set, becuase it would be
-	// added twice.
+func (s *Service) Put(ctx context.Context, kv microstorage.KV) error {
+	key, value := kv.Key(), kv.Val()
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	err = s.Put(ctx, key, value)
+	_, err := s.keyClient.Put(ctx, key, value)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -93,18 +89,13 @@ func (s *Service) Create(ctx context.Context, key, value string) error {
 	return nil
 }
 
-func (s *Service) Put(ctx context.Context, key, value string) error {
-	var err error
-
-	key, err = s.sanitizeKey(key)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+func (s *Service) Delete(ctx context.Context, k microstorage.K) error {
+	key := k.Key()
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	_, err = s.keyClient.Put(ctx, key, value)
+	_, err := s.keyClient.Delete(ctx, key)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -112,36 +103,11 @@ func (s *Service) Put(ctx context.Context, key, value string) error {
 	return nil
 }
 
-func (s *Service) Delete(ctx context.Context, key string) error {
-	var err error
-
-	key, err = s.sanitizeKey(key)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
+func (s *Service) Exists(ctx context.Context, k microstorage.K) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	_, err = s.keyClient.Delete(ctx, key)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	return nil
-}
-
-func (s *Service) Exists(ctx context.Context, key string) (bool, error) {
-	var err error
-
-	// The key isn't sanitized in Exists, because it uses Search under the
-	// hood. It causes problems when prefix is set, becuase it would be
-	// added twice.
-
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
-
-	_, err = s.Search(ctx, key)
+	_, err := s.Search(ctx, k)
 	if microstorage.IsNotFound(err) {
 		return false, nil
 	} else if err != nil {
@@ -151,24 +117,17 @@ func (s *Service) Exists(ctx context.Context, key string) (bool, error) {
 	return true, nil
 }
 
-func (s *Service) List(ctx context.Context, key string) ([]string, error) {
-	var err error
-
-	key, err = s.sanitizeListKey(key)
-	if err != nil {
-		return nil, microerror.Mask(err)
-	}
+func (s *Service) List(ctx context.Context, k microstorage.K) ([]microstorage.KV, error) {
+	key := k.Key()
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
 	opts := []clientv3.OpOption{
-		clientv3.WithKeysOnly(),
 		clientv3.WithPrefix(),
 	}
 
-	var res *clientv3.GetResponse
-	res, err = s.keyClient.Get(ctx, key, opts...)
+	res, err := s.keyClient.Get(ctx, key, opts...)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
@@ -177,18 +136,17 @@ func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 		return nil, microerror.Maskf(microstorage.NotFoundError, key)
 	}
 
+	var list []microstorage.KV
+
 	// Special case.
 	if key == "/" {
-		var list []string
+
 		for _, kv := range res.Kvs {
 			// Skip the leading slash '/'.
-			k := string(kv.Key)[1:]
-			list = append(list, k)
+			list = append(list, microstorage.MustKV(microstorage.NewKV(string(kv.Key)[1:], string(kv.Value))))
 		}
 		return list, nil
 	}
-
-	var list []string
 
 	i := len(key)
 	for _, kv := range res.Kvs {
@@ -205,58 +163,31 @@ func (s *Service) List(ctx context.Context, key string) ([]string, error) {
 			continue
 		}
 
-		list = append(list, k[i+1:])
+		list = append(list, microstorage.MustKV(microstorage.NewKV(k[i+1:], string(kv.Value))))
 	}
 
 	return list, nil
 }
 
-func (s *Service) Search(ctx context.Context, key string) (string, error) {
-	var err error
-
-	key, err = s.sanitizeKey(key)
-	if err != nil {
-		return "", microerror.Mask(err)
-	}
+func (s *Service) Search(ctx context.Context, k microstorage.K) (microstorage.KV, error) {
+	key := k.Key()
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	var res *clientv3.GetResponse
-	res, err = s.keyClient.Get(ctx, key)
+	res, err := s.keyClient.Get(ctx, key)
 
 	if err != nil {
-		return "", microerror.Mask(err)
+		return microstorage.KV{}, microerror.Mask(err)
 	}
 
 	if res.Count == 0 {
-		return "", microerror.Maskf(microstorage.NotFoundError, key)
+		return microstorage.KV{}, microerror.Maskf(microstorage.NotFoundError, key)
 	}
 
 	if res.Count > 1 {
-		return "", microerror.Maskf(multipleValuesError, key)
+		return microstorage.KV{}, microerror.Maskf(multipleValuesError, key)
 	}
 
-	return string(res.Kvs[0].Value), nil
-}
-
-// sanitizeKey invokes microstorage.SanitizeKey and adds common prefix to it.
-func (s *Service) sanitizeKey(key string) (string, error) {
-	key, err := microstorage.SanitizeKey(key)
-	if err != nil {
-		return "", microerror.Mask(err)
-	}
-	return s.prefix + key, nil
-}
-
-// sanitizeListKey invokes microstorage.SanitizeListKey and adds common prefix to it.
-func (s *Service) sanitizeListKey(key string) (string, error) {
-	key, err := microstorage.SanitizeListKey(key)
-	if err != nil {
-		return "", microerror.Mask(err)
-	}
-	if key == "/" && s.prefix != "" {
-		return s.prefix, nil
-	}
-	return s.prefix + key, nil
+	return microstorage.MustKV(microstorage.NewKV(key, string(res.Kvs[0].Value))), nil
 }
